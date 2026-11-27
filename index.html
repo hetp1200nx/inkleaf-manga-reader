@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Inkleaf Manga Reader</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=Zen+Kaku+Gothic+New:wght@500;700&display=swap" rel="stylesheet">
+<style>
+/* VOICE: playful but precise, like holding a fresh tankobon
+   IDEA: a printed manga volume: screentone ground, ink gutters, red obi band
+   PICTURE: the page itself, huge, turning like paper; cinema pans like an anime storyboard
+   COLOUR and TYPE: ink black, paper white, obi red #e5352b; Dela Gothic One + Zen Kaku Gothic New
+   LAYOUT: full-bleed stage, floating top bar and bottom scrubber that hide on a centre tap */
+:root{color-scheme:light dark;--bg:light-dark(#e9e8e5,#0c0c0d);--ink:light-dark(#121212,#f1f0ee);--bar:light-dark(rgba(255,255,255,.93),rgba(22,22,24,.93));--line:light-dark(#d2d0cb,#2e2e33);--dot:light-dark(rgba(0,0,0,.10),rgba(255,255,255,.06));--mut:light-dark(#5a5853,#a7a5a0);--chip:light-dark(#f1f0ed,#26262a);--red:#e5352b;--st:env(safe-area-inset-top,0px);--sb:env(safe-area-inset-bottom,0px)}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+html,body{height:100%}
+body{margin:0;background:var(--bg) radial-gradient(var(--dot) 1.3px,transparent 1.7px) 0 0/9px 9px;color:var(--ink);font:16px/1.5 "Zen Kaku Gothic New",system-ui,sans-serif;overflow:hidden;-webkit-tap-highlight-color:transparent}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;border-radius:10px;min-height:44px;min-width:44px;display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:0 10px;white-space:nowrap}
+button:focus-visible,input:focus-visible{outline:3px solid var(--red);outline-offset:2px}
+svg.i{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.bar{position:fixed;left:0;right:0;z-index:20;background:var(--bar);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);display:flex;align-items:center;gap:8px;padding:6px max(12px,env(safe-area-inset-left));transition:transform .28s,opacity .28s}
+#top{top:0;padding-top:calc(6px + var(--st));border-bottom:1px solid var(--line);flex-wrap:wrap}
+#bot{bottom:0;padding-bottom:calc(6px + var(--sb));border-top:1px solid var(--line)}
+.hide #top{transform:translateY(-105%);opacity:0;pointer-events:none}
+.hide #bot{transform:translateY(105%);opacity:0;pointer-events:none}
+.brand{display:flex;align-items:center;gap:9px;font:22px/1 "Dela Gothic One",sans-serif;letter-spacing:.01em}
+.brand i{width:26px;height:30px;background:#111;position:relative;border-radius:2px;box-shadow:inset 0 -9px 0 var(--red)}
+:root[data-theme=dark] .brand i{background:#f1f0ee}
+.name{color:var(--mut);font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:30vw}
+.ctrls{display:flex;align-items:center;gap:6px;margin-left:auto;overflow-x:auto;scrollbar-width:none}
+.ctrls::-webkit-scrollbar{display:none}
+.seg{display:flex;background:var(--chip);border-radius:12px;padding:3px;flex:none}
+.seg button{min-height:38px;font-size:14px;font-weight:700}
+.seg button[aria-pressed=true]{background:#121212;color:#fff}
+:root[data-theme=dark] .seg button[aria-pressed=true]{background:#f1f0ee;color:#121212}
+.chip{background:var(--chip);font-size:14px;font-weight:700;flex:none}
+.open{background:var(--red);color:#fff;font-weight:700;font-size:15px;flex:none;order:4}
+#range{flex:1;accent-color:var(--red);height:44px;margin:0 4px}
+.lbl{font-variant-numeric:tabular-nums;font-size:14px;font-weight:700;min-width:64px;text-align:center;white-space:nowrap}
+.cine-only{display:none}
+[data-mode=cinema] .cine-only{display:inline-flex}
+#prog{position:fixed;top:0;left:0;height:3px;background:var(--red);z-index:30;transition:width .3s;pointer-events:none}
+.rtl #prog{left:auto;right:0}
+main{position:fixed;inset:0}
+.view{position:absolute;inset:0;display:none}
+[data-mode=flip] #flip,[data-mode=scroll] #scroll,[data-mode=cinema] #cinema{display:grid}
+#flip{place-items:center;overflow:hidden;touch-action:none;transition:padding .28s}
+.book{grid-area:1/1;display:flex;position:relative;background:#fff;box-shadow:0 22px 60px rgba(0,0,0,.34),0 2px 6px rgba(0,0,0,.2);transition:width .3s,height .3s,transform .25s;transform-origin:center}
+.book.drag{transition:width .3s,height .3s}
+.book img{flex:1 1 0;width:0;height:100%;object-fit:contain;display:block;background:#fff;user-select:none;-webkit-user-select:none;-webkit-user-drag:none;pointer-events:none}
+.rtl .book{flex-direction:row-reverse}
+.book.two::after{content:"";position:absolute;top:0;bottom:0;left:50%;width:64px;margin-left:-32px;background:linear-gradient(90deg,transparent,rgba(0,0,0,.16) 44%,rgba(0,0,0,.3) 50%,rgba(0,0,0,.16) 56%,transparent);pointer-events:none}
+.book.wait::before{content:"";position:absolute;left:50%;top:50%;width:36px;height:36px;margin:-18px;border:4px solid #ddd;border-top-color:var(--red);border-radius:50%;animation:spin .8s linear infinite;z-index:1}
+.leaf{z-index:3;pointer-events:none;transition:none;backface-visibility:hidden}
+.leaf::after{display:none}
+@keyframes spin{to{transform:rotate(1turn)}}
+#scroll{display:none;overflow-y:auto;overscroll-behavior:contain;padding:calc(64px + var(--st)) 0 calc(76px + var(--sb));align-content:start}
+[data-mode=scroll] #scroll{display:block}
+.strip{max-width:860px;margin:0 auto 6px;background:#fff;position:relative;display:grid;place-items:center;box-shadow:0 4px 20px rgba(0,0,0,.15)}
+.strip span{color:#aaa;font:28px "Dela Gothic One",sans-serif}
+.strip img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;opacity:0;transition:opacity .35s}
+.strip.ok img{opacity:1}
+#cinema{background:#050505;overflow:hidden;touch-action:none}
+.cine{position:absolute;opacity:0;transition:opacity .8s;will-change:transform;user-select:none;-webkit-user-drag:none;pointer-events:none}
+.cine.in{opacity:1}
+#cinema::after{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(#050505,transparent 12%,transparent 88%,#050505)}
+.tone-night .book,.tone-night .strip{background:#141414}
+.tone-night .book img,.tone-night .strip img,.tone-night .cine{filter:invert(.92) hue-rotate(180deg)}
+.tone-sepia .book img,.tone-sepia .strip img,.tone-sepia .cine{filter:sepia(.5) contrast(1.06) brightness(.97)}
+#drawer{position:fixed;z-index:40;right:0;top:0;bottom:0;width:min(380px,100%);background:var(--bar);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-left:1px solid var(--line);display:flex;flex-direction:column;padding-top:var(--st);box-shadow:-20px 0 50px rgba(0,0,0,.25)}
+#drawer[hidden]{display:none}
+.dhead{display:flex;align-items:center;justify-content:space-between;padding:8px 8px 8px 18px;font:20px "Dela Gothic One",sans-serif}
+#grid{overflow-y:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:12px;padding:6px 16px calc(20px + var(--sb))}
+#grid button{display:block;padding:0;border-radius:4px;background:#fff;position:relative;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.18)}
+#grid img{width:100%;height:100%;object-fit:cover;display:block}
+#grid b{position:absolute;left:4px;bottom:4px;background:#121212;color:#fff;font-size:12px;padding:1px 6px;border-radius:4px}
+#grid .on{outline:3px solid var(--red);outline-offset:2px}
+.layer{position:fixed;inset:0;z-index:50;display:grid;place-items:center;text-align:center;pointer-events:none;opacity:0;transition:opacity .2s}
+.layer.on{opacity:1;pointer-events:auto}
+#drop{background:rgba(229,53,43,.92);color:#fff;font:clamp(28px,6vw,52px)/1.05 "Dela Gothic One",sans-serif;border:6px dashed #fff;margin:0}
+#load{background:rgba(0,0,0,.55);color:#fff;font-weight:700}
+#load div::before{content:"";display:block;width:44px;height:44px;margin:0 auto 14px;border:5px solid rgba(255,255,255,.3);border-top-color:var(--red);border-radius:50%;animation:spin .8s linear infinite}
+#toast{position:fixed;z-index:60;left:50%;bottom:calc(90px + var(--sb));transform:translate(-50%,20px);background:#121212;color:#fff;padding:10px 18px;border-radius:999px;font-size:15px;font-weight:700;opacity:0;transition:.25s;pointer-events:none;max-width:90vw;text-align:center}
+#toast.on{opacity:1;transform:translate(-50%,0)}
+@media(max-width:640px){
+ .name,.seg span,.open span{display:none}
+ .open{order:2;margin-left:auto}
+ .ctrls{order:3;width:100%;margin:0;justify-content:space-between}
+ .brand{font-size:19px}
+ #drawer{top:auto;width:100%;height:min(70vh,560px);border-left:0;border-top:1px solid var(--line);border-radius:18px 18px 0 0}
+ .lbl{min-width:54px;font-size:13px}
+}
+@media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body data-mode="flip" class="rtl">
+<div id="prog"></div>
+<header id="top" class="bar">
+  <div class="brand"><i></i>Inkleaf</div>
+  <span id="name" class="name"></span>
+  <nav class="ctrls" aria-label="Reader settings">
+    <div class="seg" role="group" aria-label="Reading mode">
+      <button data-m="flip" title="Flip pages (1)"><svg class="i" viewBox="0 0 24 24"><path d="M12 6c-2-1.5-5-2-8-1.5v14c3-.5 6 0 8 1.5 2-1.5 5-2 8-1.5v-14c-3-.5-6 0-8 1.5zM12 6v14"/></svg><span>Flip</span></button>
+      <button data-m="scroll" title="Vertical scroll (2)"><svg class="i" viewBox="0 0 24 24"><rect x="6" y="2" width="12" height="9" rx="1"/><rect x="6" y="13" width="12" height="9" rx="1"/></svg><span>Scroll</span></button>
+      <button data-m="cinema" title="Cinema auto-pan (3)"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M10 9l5 3-5 3z"/></svg><span>Cinema</span></button>
+    </div>
+    <button id="dirBtn" class="chip" title="Reading direction (D)"><span id="dirLbl">R→L</span></button>
+    <button id="toneBtn" class="chip" title="Page tone (T)"><span id="toneLbl">Paper</span></button>
+    <button id="fsBtn" class="chip" aria-label="Fullscreen" title="Fullscreen (F)"><svg class="i" viewBox="0 0 24 24"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"/></svg></button>
+  </nav>
+  <button id="openBtn" class="open" title="Open a manga PDF or images"><svg class="i" viewBox="0 0 24 24"><path d="M12 16V4M7 9l5-5 5 5M4 20h16"/></svg><span>Open PDF</span></button>
+</header>
+
+<main id="stage">
+  <div id="flip" class="view"><div id="book" class="book"></div></div>
+  <div id="scroll" class="view"></div>
+  <div id="cinema" class="view"></div>
+</main>
+
+<footer id="bot" class="bar">
+  <button id="leftBtn" aria-label="Page left"><svg class="i" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+  <button id="playBtn" class="cine-only" aria-label="Play or pause"><svg class="i" viewBox="0 0 24 24"><path id="playIc" d="M8 5l11 7-11 7z"/></svg></button>
+  <input id="range" type="range" min="1" max="1" value="1" aria-label="Page">
+  <button id="speedBtn" class="chip cine-only" title="Pan speed">1×</button>
+  <span id="lbl" class="lbl">–</span>
+  <button id="rightBtn" aria-label="Page right"><svg class="i" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button>
+  <button id="thumbBtn" aria-label="All pages" title="All pages (G)"><svg class="i" viewBox="0 0 24 24"><rect x="4" y="4" width="6" height="6"/><rect x="14" y="4" width="6" height="6"/><rect x="4" y="14" width="6" height="6"/><rect x="14" y="14" width="6" height="6"/></svg></button>
+</footer>
+
+<aside id="drawer" hidden aria-label="All pages"><div class="dhead">All pages<button id="closeD" aria-label="Close"><svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div><div id="grid"></div></aside>
+<div id="drop" class="layer"><div>Drop your manga<br>to start reading</div></div>
+<div id="load" class="layer"><div id="loadMsg">Opening…</div></div>
+<div id="toast" role="status"></div>
+<input id="file" type="file" accept="application/pdf,.pdf,image/*" multiple hidden>
+
+<script src="lib/pdf.min.js"></script>
+<script src="lib/pdf.worker.min.js"></script>
+<script>
+{
+const $=s=>document.querySelector(s);
+const body=document.body,book=$('#book'),flipV=$('#flip'),scrollV=$('#scroll'),cineV=$('#cinema'),range=$('#range');
+const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const store={get(k,d){try{const v=localStorage.getItem('inkleaf:'+k);return v==null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem('inkleaf:'+k,JSON.stringify(v))}catch(e){}}};
+const st={src:null,page:0,mode:'flip',rtl:true,tone:'paper',speed:1,playing:false,busy:false,z:1,tx:0,ty:0,hidden:false};
+Object.assign(st,store.get('prefs',{}));
+const savePrefs=()=>store.set('prefs',{mode:st.mode,rtl:st.rtl,tone:st.tone,speed:st.speed});
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+let toastT;const toast=m=>{const t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('on'),2300)};
+const loading=m=>{$('#loadMsg').textContent=m||'';$('#load').classList.toggle('on',!!m)};
+const toURL=c=>new Promise(r=>c.toBlob(b=>r(URL.createObjectURL(b)),'image/jpeg',.9));
+const pdfjs=window.pdfjsLib;
+if(pdfjs)pdfjs.GlobalWorkerOptions.workerSrc='lib/pdf.worker.min.js';
+
+/* ---------- sources ---------- */
+async function pdfSource(file){
+  if(!pdfjs)throw new Error('PDF engine did not load');
+  const doc=await pdfjs.getDocument({data:await file.arrayBuffer()}).promise;
+  const p1=await doc.getPage(1),v=p1.getViewport({scale:1});
+  const cache=new Map();let q=Promise.resolve();
+  const render=async i=>{const pg=await doc.getPage(i+1),v0=pg.getViewport({scale:1});
+    const target=clamp(innerHeight*(devicePixelRatio||1)*1.15,1000,2400),vp=pg.getViewport({scale:target/v0.height});
+    const c=document.createElement('canvas');c.width=vp.width|0;c.height=vp.height|0;const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);
+    await pg.render({canvasContext:x,viewport:vp}).promise;pg.cleanup();return toURL(c)};
+  return{name:file.name,key:file.name+':'+file.size,count:doc.numPages,ratio:v.height/v.width,
+    get(i){if(!cache.has(i)){const p=q.then(()=>render(i));q=p.catch(()=>{});cache.set(i,p)}return cache.get(i)}};
+}
+async function imageSource(files){
+  files.sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true}));
+  const urls=files.map(f=>URL.createObjectURL(f));const im=new Image();im.src=urls[0];await im.decode().catch(()=>{});
+  return{name:files.length+' images',key:'img:'+files.map(f=>f.name).join('|').slice(0,200),count:files.length,ratio:(im.naturalHeight/im.naturalWidth)||1.5,get:i=>Promise.resolve(urls[i])};
+}
+
+/* ---------- original sample comic, drawn on canvas ---------- */
+const S=[
+ {L:[[0,0,1,1]],k:['cover']},
+ {L:[[0,0,1,.42],[0,.42,.55,1],[.55,.42,1,1]],k:['city','rain','moon'],t:['Neo-Kyoto. 2:14 a.m.','','Another package.']},
+ {L:[[0,0,.5,.5],[.5,0,1,.5],[0,.5,1,1]],k:['tone','plain','speed'],t:['Before dawn.','No questions?',''],s:[0,0,'VRRMM']},
+ {L:[[0,0,1,.3],[0,.3,1,.66],[0,.66,1,1]],k:['speed','city','tone'],t:['','Faster…','Someone is following.'],s:['ZOOM']},
+ {L:[[0,0,.6,.55],[.6,0,1,.55],[0,.55,1,1]],k:['moon','tone','speed'],t:['Who are you?!','',''],s:[0,0,'KRAK']},
+ {L:[[0,0,1,1]],k:['speed'],t:['Hang on!'],s:['WHOOSH']},
+ {L:[[0,0,.5,1],[.5,0,1,.5],[.5,.5,1,1]],k:['rain','city','plain'],t:['','The rooftops.','Almost there.']},
+ {L:[[0,0,1,.6],[0,.6,1,1]],k:['moon','tone'],t:['Delivered.','To be continued']}
+];
+const rng=s=>()=>(s=(s*1664525+1013904223)>>>0)/4294967296;
+const dots=(x,b,f)=>{x.fillStyle='#111';for(let y=b.y,r=0;y<b.y+b.h+12;y+=12,r++)for(let X=b.x+(r%2?6:0);X<b.x+b.w+12;X+=12){const d=f((X-b.x)/b.w,(y-b.y)/b.h,X,y);if(d>.3){x.beginPath();x.arc(X,y,d,0,7);x.fill()}}};
+const lines=(x,b,R,col,n,fx,fy)=>{x.fillStyle=col;const L=Math.hypot(b.w,b.h);for(let k=0;k<n;k++){const a=R()*6.283,w=.004+R()*.012,r0=Math.min(b.w,b.h)*(.16+R()*.16);x.beginPath();x.moveTo(fx+Math.cos(a)*r0,fy+Math.sin(a)*r0);x.lineTo(fx+Math.cos(a-w)*L,fy+Math.sin(a-w)*L);x.lineTo(fx+Math.cos(a+w)*L,fy+Math.sin(a+w)*L);x.fill()}};
+const KIND={
+ plain:(x,b)=>dots(x,b,(u,v)=>u+v>1.25?3:0),
+ tone:(x,b)=>dots(x,b,(u,v)=>4.6*(1-v*.8)),
+ speed:(x,b,R)=>lines(x,b,R,'#111',150,b.x+b.w*.5,b.y+b.h*.5),
+ rain:(x,b,R)=>{x.fillStyle='#1b1b1b';x.fillRect(b.x,b.y,b.w,b.h);x.strokeStyle='#fff';for(let k=0;k<160;k++){const X=b.x+R()*b.w*1.2,Y=b.y+R()*b.h,l=20+R()*40;x.lineWidth=R()<.2?3:1.4;x.beginPath();x.moveTo(X,Y);x.lineTo(X-l*.35,Y+l);x.stroke()}},
+ moon:(x,b)=>{const cx=b.x+b.w*.66,cy=b.y+b.h*.4,r=Math.min(b.w,b.h)*.24;dots(x,b,(u,v,X,Y)=>Math.hypot(X-cx,Y-cy)<r+8?0:3.6*(.35+v*.65));x.fillStyle='#fff';x.strokeStyle='#111';x.lineWidth=4;x.beginPath();x.arc(cx,cy,r,0,7);x.fill();x.stroke()},
+ city:(x,b,R)=>{dots(x,b,(u,v)=>2.6*(1-v));let X=b.x-10;while(X<b.x+b.w){const w=40+R()*90,h=b.h*(.25+R()*.55);x.fillStyle='#111';x.fillRect(X,b.y+b.h-h,w,h);x.fillStyle='#fff';for(let wy=b.y+b.h-h+14;wy<b.y+b.h-10;wy+=22)for(let wx=X+8;wx<X+w-12;wx+=16)if(R()<.35)x.fillRect(wx,wy,7,10);X+=w+4}},
+ cover:(x,b,R)=>{x.fillStyle='#111';x.fillRect(b.x,b.y,b.w,b.h);lines(x,b,R,'#2c2c2c',120,b.x+b.w*.6,b.y+b.h*.36);x.fillStyle='#e5352b';x.beginPath();x.arc(b.x+b.w*.6,b.y+b.h*.36,b.w*.26,0,7);x.fill();
+  x.fillStyle='#fff';x.textAlign='left';x.font='150px "Dela Gothic One",sans-serif';x.fillText('NIGHT',b.x+40,b.y+b.h*.66);x.fillText('COURIER',b.x+40,b.y+b.h*.66+150);
+  x.fillStyle='#e5352b';x.fillRect(b.x,b.y+b.h-150,b.w,150);x.fillStyle='#111';x.font='700 40px "Zen Kaku Gothic New",sans-serif';x.fillText('Vol. 1  ·  a demo story',b.x+40,b.y+b.h-62)}
+};
+function sfx(x,b,t){x.save();x.translate(b.x+b.w*.55,b.y+b.h*.58);x.rotate(-.18);x.font=Math.min(b.w/t.length*1.45,170)+'px "Dela Gothic One",sans-serif';x.textAlign='center';x.textBaseline='middle';x.lineJoin='round';x.lineWidth=16;x.strokeStyle='#111';x.strokeText(t,0,0);x.fillStyle='#fff';x.fillText(t,0,0);x.restore()}
+function bubble(x,b,t){x.font='700 30px "Zen Kaku Gothic New",sans-serif';const rx=x.measureText(t).width/2+34,ry=44,cx=Math.min(b.x+rx+24,b.x+b.w-rx-8),cy=b.y+ry+26;
+  x.fillStyle='#fff';x.strokeStyle='#111';x.lineWidth=4;x.beginPath();x.moveTo(cx-10,cy+ry-6);x.lineTo(cx+4,cy+ry+34);x.lineTo(cx+22,cy+ry-8);x.fill();x.stroke();
+  x.beginPath();x.ellipse(cx,cy,rx,ry,0,0,7);x.fill();x.stroke();x.fillStyle='#111';x.textAlign='center';x.textBaseline='middle';x.fillText(t,cx,cy+2)}
+function drawSample(i){
+  const W=900,H=1350,c=document.createElement('canvas');c.width=W;c.height=H;const x=c.getContext('2d'),R=rng(i*97+13),p=S[i],m=i?46:0,g=18,bh=i?H-70:H;
+  x.fillStyle='#fff';x.fillRect(0,0,W,H);
+  p.L.forEach((f,k)=>{const X0=m+f[0]*(W-2*m)+(f[0]>0?g/2:0),X1=m+f[2]*(W-2*m)-(f[2]<1?g/2:0),Y0=m+f[1]*(bh-m)+(f[1]>0?g/2:0),Y1=m+f[3]*(bh-m)-(f[3]<1?g/2:0),b={x:X0,y:Y0,w:X1-X0,h:Y1-Y0};
+    x.save();x.beginPath();x.rect(b.x,b.y,b.w,b.h);x.clip();KIND[p.k[k]](x,b,R);if(p.s&&p.s[k])sfx(x,b,p.s[k]);x.restore();
+    if(i){x.lineWidth=6;x.strokeStyle='#111';x.strokeRect(b.x,b.y,b.w,b.h)}
+    if(p.t&&p.t[k])bubble(x,b,p.t[k])});
+  if(i){x.fillStyle='#111';x.font='700 24px "Zen Kaku Gothic New",sans-serif';x.textAlign='center';x.fillText(i,W/2,H-28)}
+  return toURL(c);
+}
+function sampleSource(){const cache=new Map();return{name:'Night Courier · sample pages drawn for this demo',key:'sample',count:S.length,ratio:1.5,get(i){if(!cache.has(i))cache.set(i,drawSample(i));return cache.get(i)}}}
+
+/* ---------- layout helpers ---------- */
+const spread=()=>st.mode==='flip'&&innerWidth>=820&&innerWidth/innerHeight>1.15&&st.src.count>2;
+function viewPages(p){if(!spread())return[p];if(p===0)return[0];const a=p%2?p:p-1;return[a,a+1].filter(n=>n<st.src.count)}
+function fitBook(n){
+  const top=st.hidden?14:$('#top').offsetHeight+14,bot=st.hidden?14:$('#bot').offsetHeight+14;
+  flipV.style.padding=top+'px 12px '+bot+'px';
+  const W=innerWidth-24,H=innerHeight-top-bot,r=st.src.ratio,ph=Math.max(120,Math.min(H,W/n*r));
+  book.style.width=ph/r*n+'px';book.style.height=ph+'px';
+}
+function applyZoom(){book.style.transform=st.z>1?`translate(${st.tx}px,${st.ty}px) scale(${st.z})`:''}
+function resetZoom(){st.z=1;st.tx=st.ty=0;applyZoom()}
+function prefetch(){for(const d of[1,2,-1,3]){const i=st.page+d;if(i>=0&&i<st.src.count)st.src.get(i)}}
+
+/* ---------- flip mode ---------- */
+let flipTok=0;
+async function renderFlip(){
+  const t=++flipTok,pages=viewPages(st.page);fitBook(pages.length);book.classList.add('wait');
+  const urls=await Promise.all(pages.map(i=>st.src.get(i)));if(t!==flipTok)return;
+  const els=urls.map((u,k)=>{const im=new Image();im.src=u;im.alt='Page '+(pages[k]+1);im.draggable=false;return im});
+  await Promise.all(els.map(im=>im.decode().catch(()=>{})));if(t!==flipTok)return;
+  book.replaceChildren(...els);book.classList.toggle('two',pages.length>1);book.classList.remove('wait');resetZoom();prefetch();
+}
+function bump(dir){if(!reduce)book.animate([{transform:'none'},{transform:`translateX(${(dir>0)!==st.rtl?-14:14}px)`},{transform:'none'}],{duration:260});toast(dir>0?'That’s the last page':'That’s the first page')}
+async function step(dir){
+  if(!st.src)return;const n=st.src.count;
+  if(st.mode==='scroll'){jump(st.page+dir);return}
+  if(st.mode==='cinema'){const t=st.page+dir;if(t<0||t>=n){toast(dir>0?'That’s the last page':'That’s the first page');return}st.page=t;renderCinema();updateUI();return}
+  if(st.busy)return;
+  const cur=viewPages(st.page),t=dir>0?cur[cur.length-1]+1:cur[0]-1;
+  if(t<0||t>=n){bump(dir);return}
+  st.busy=true;resetZoom();
+  const leaf=book.cloneNode(true);leaf.removeAttribute('id');leaf.classList.add('leaf');leaf.classList.remove('wait');
+  const toLeft=(dir>0)!==st.rtl;leaf.style.transformOrigin=(toLeft?'left':'right')+' center';
+  flipV.appendChild(leaf);st.page=t;updateUI();
+  try{await renderFlip()}catch(e){}
+  if(!reduce)await leaf.animate([{transform:'perspective(2400px) rotateY(0deg)',filter:'brightness(1)',opacity:1},{transform:`perspective(2400px) rotateY(${toLeft?-100:100}deg)`,filter:'brightness(.5)',opacity:.1}],{duration:580,easing:'cubic-bezier(.45,.05,.25,1)'}).finished.catch(()=>{});
+  leaf.remove();st.busy=false;
+}
+function jump(p){
+  if(!st.src)return;p=clamp(p,0,st.src.count-1);st.page=p;
+  if(st.mode==='flip')renderFlip();else if(st.mode==='cinema')renderCinema();else{const el=scrollV.children[p];if(el)scrollV.scrollTo({top:el.offsetTop-$('#top').offsetHeight-6,behavior:'auto'})}
+  updateUI();
+}
+
+/* ---------- scroll mode ---------- */
+let io,raf=0,lastY=0;
+function buildScroll(){
+  if(io)io.disconnect();
+  scrollV.innerHTML=Array.from({length:st.src.count},(_,i)=>`<div class="strip" data-i="${i}" style="aspect-ratio:1/${st.src.ratio}"><span>${i+1}</span></div>`).join('');
+  io=new IntersectionObserver(es=>{for(const e of es)if(e.isIntersecting){const d=e.target,i=+d.dataset.i;io.unobserve(d);st.src.get(i).then(u=>{const im=new Image();im.alt='Page '+(i+1);im.onload=()=>d.classList.add('ok');im.src=u;d.appendChild(im)})}},{root:scrollV,rootMargin:'120% 0px'});
+  scrollV.querySelectorAll('.strip').forEach(d=>io.observe(d));
+}
+scrollV.addEventListener('scroll',()=>{if(raf)return;raf=requestAnimationFrame(()=>{raf=0;const k=scrollV.children,y=scrollV.scrollTop+scrollV.clientHeight*.35;let lo=0,hi=k.length-1;while(lo<hi){const m=(lo+hi+1)>>1;if(k[m].offsetTop<=y)lo=m;else hi=m-1}
+  if(lo!==st.page){st.page=lo;updateUI()}const dy=scrollV.scrollTop-lastY;if(Math.abs(dy)>40){setHidden(dy>0&&scrollV.scrollTop>80);lastY=scrollV.scrollTop}})},{passive:true});
+
+/* ---------- cinema mode ---------- */
+let cAnim=null,cTimer=0,cTok=0;
+function stopCinema(){clearTimeout(cTimer);if(cAnim)cAnim.cancel();cAnim=null}
+async function renderCinema(){
+  stopCinema();const t=++cTok,url=await st.src.get(st.page);if(t!==cTok)return;
+  const im=new Image();im.className='cine';im.alt='Page '+(st.page+1);im.src=url;await im.decode().catch(()=>{});if(t!==cTok)return;
+  const W=cineV.clientWidth,H=cineV.clientHeight,r=(im.naturalHeight/im.naturalWidth)||st.src.ratio;
+  let w=Math.min(W,H/r*1.9),h=w*r;if(h<H*.98&&w>=W){h=Math.min(H,W*r);w=h/r}
+  Object.assign(im.style,{width:w+'px',height:h+'px',left:(W-w)/2+'px',top:Math.max(0,(H-h)/2)+'px'});
+  for(const o of cineV.querySelectorAll('.cine')){o.classList.remove('in');setTimeout(()=>o.remove(),850)}
+  cineV.appendChild(im);requestAnimationFrame(()=>im.classList.add('in'));
+  const dist=Math.max(0,h-H),fr=dist>0?[{transform:'translateY(0)'},{transform:`translateY(${-dist}px)`}]:[{transform:'scale(1)'},{transform:'scale(1.07)'}];
+  cAnim=im.animate(fr,{duration:reduce?1:(4200+dist*9)/st.speed,delay:reduce?0:700/st.speed,easing:'ease-in-out',fill:'forwards'});
+  if(!st.playing)cAnim.pause();
+  cAnim.onfinish=()=>{if(!st.playing)return;if(st.page<st.src.count-1)cTimer=setTimeout(()=>{st.page++;renderCinema();updateUI()},900/st.speed);else{st.playing=false;updateUI();toast('The end. Tap play to watch again')}};
+  prefetch();
+}
+function togglePlay(){
+  if(st.mode!=='cinema')return;st.playing=!st.playing;
+  if(st.playing){if(!cAnim||cAnim.playState==='finished'){if(st.page>=st.src.count-1&&cAnim&&cAnim.playState==='finished')st.page=0;renderCinema()}else cAnim.play()}else{clearTimeout(cTimer);if(cAnim)cAnim.pause()}
+  updateUI();
+}
+
+/* ---------- thumbnails ---------- */
+let tio;
+function buildThumbs(){
+  if(tio)tio.disconnect();const g=$('#grid');
+  g.innerHTML=Array.from({length:st.src.count},(_,i)=>`<button data-i="${i}" style="aspect-ratio:1/${st.src.ratio}" aria-label="Go to page ${i+1}"><b>${i+1}</b></button>`).join('');
+  tio=new IntersectionObserver(es=>{for(const e of es)if(e.isIntersecting){const b=e.target;tio.unobserve(b);st.src.get(+b.dataset.i).then(u=>{const im=new Image();im.src=u;im.alt='';b.prepend(im)})}},{root:g,rootMargin:'200px'});
+  g.querySelectorAll('button').forEach(b=>tio.observe(b));
+}
+$('#grid').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;jump(+b.dataset.i);if(innerWidth<900)$('#drawer').hidden=true});
+$('#thumbBtn').onclick=()=>{const d=$('#drawer');d.hidden=!d.hidden;if(!d.hidden){const a=$('#grid .on');if(a)a.scrollIntoView({block:'center'})}};
+$('#closeD').onclick=()=>$('#drawer').hidden=true;
+
+/* ---------- UI state ---------- */
+const TONES={paper:'Paper',sepia:'Sepia',night:'Night'};
+function updateUI(){
+  const s=st.src;if(!s)return;const n=s.count,pg=st.mode==='flip'?viewPages(st.page):[st.page];
+  range.max=n;range.value=st.page+1;range.dir=st.rtl?'rtl':'ltr';
+  $('#lbl').textContent=(pg.length>1?`${pg[0]+1}–${pg[1]+1}`:pg[0]+1)+' / '+n;
+  $('#prog').style.width=(n>1?(pg[pg.length-1])/(n-1)*100:100)+'%';
+  body.dataset.mode=st.mode;body.classList.toggle('rtl',st.rtl);body.className=body.className.replace(/tone-\w+/g,'').trim()+' tone-'+st.tone;
+  document.querySelectorAll('.seg button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.m===st.mode));
+  $('#dirLbl').textContent=st.rtl?'R→L':'L→R';$('#toneLbl').textContent=TONES[st.tone];
+  $('#leftBtn').setAttribute('aria-label',st.rtl?'Next page':'Previous page');$('#rightBtn').setAttribute('aria-label',st.rtl?'Previous page':'Next page');
+  $('#playIc').setAttribute('d',st.playing?'M8 5v14M16 5v14':'M8 5l11 7-11 7z');$('#speedBtn').textContent=st.speed+'×';
+  document.querySelectorAll('#grid .on').forEach(b=>b.classList.remove('on'));const tb=$('#grid').children[st.page];if(tb)tb.classList.add('on');
+  store.set('pos:'+s.key,st.page);
+}
+function setHidden(h){if(st.hidden===h)return;st.hidden=h;body.classList.toggle('hide',h);if(st.mode==='flip'&&st.src)fitBook(viewPages(st.page).length)}
+function setMode(m){
+  if(!st.src||m===st.mode&&body.dataset.mode===m)return;stopCinema();st.mode=m;st.playing=m==='cinema';body.dataset.mode=m;savePrefs();
+  if(m==='flip')renderFlip();else if(m==='cinema')renderCinema();else requestAnimationFrame(()=>jump(st.page));
+  updateUI();
+}
+function setSource(s){
+  stopCinema();st.src=s;const saved=clamp(store.get('pos:'+s.key,0)|0,0,s.count-1);st.page=saved;$('#name').textContent=s.name;
+  buildScroll();buildThumbs();const m=st.mode;st.mode='';setMode(m||'flip');
+  if(saved>0)toast('Picked up where you left off: page '+(saved+1));
+}
+async function openFiles(list){
+  const files=[...list];if(!files.length)return;
+  const pdf=files.find(f=>f.type==='application/pdf'||/\.pdf$/i.test(f.name)),imgs=files.filter(f=>f.type.startsWith('image/'));
+  if(!pdf&&!imgs.length){toast('Pick a PDF, or a set of page images');return}
+  loading('Opening '+(pdf?pdf.name:imgs.length+' images')+'…');
+  try{setSource(pdf?await pdfSource(pdf):await imageSource(imgs))}catch(e){console.error(e);toast(e.message==='PDF engine did not load'?'The PDF engine didn’t load. Check your connection':'Couldn’t open that file')}finally{loading('')}
+}
+
+/* ---------- controls ---------- */
+document.querySelectorAll('.seg button').forEach(b=>b.onclick=()=>setMode(b.dataset.m));
+$('#dirBtn').onclick=()=>{st.rtl=!st.rtl;savePrefs();updateUI();toast(st.rtl?'Right to left, manga style':'Left to right, comic style')};
+$('#toneBtn').onclick=()=>{const k=Object.keys(TONES);st.tone=k[(k.indexOf(st.tone)+1)%k.length];savePrefs();updateUI()};
+$('#fsBtn').onclick=()=>{const d=document;try{if(d.fullscreenElement)d.exitFullscreen();else{const p=d.documentElement.requestFullscreen&&d.documentElement.requestFullscreen();if(p)p.catch(()=>toast('Fullscreen isn’t available here'));else toast('Fullscreen isn’t available here')}}catch(e){toast('Fullscreen isn’t available here')}};
+$('#openBtn').onclick=()=>$('#file').click();
+$('#file').onchange=e=>{openFiles(e.target.files);e.target.value=''};
+$('#leftBtn').onclick=()=>step(st.rtl?1:-1);$('#rightBtn').onclick=()=>step(st.rtl?-1:1);
+$('#playBtn').onclick=togglePlay;
+$('#speedBtn').onclick=()=>{const v=[.5,1,1.5,2];st.speed=v[(v.indexOf(st.speed)+1)%v.length];savePrefs();updateUI();if(st.mode==='cinema'&&st.playing)renderCinema()};
+range.oninput=()=>{const p=range.value-1;$('#lbl').textContent=(p+1)+' / '+st.src.count};
+range.onchange=()=>jump(range.value-1);
+
+/* drag and drop */
+let dc=0;
+addEventListener('dragenter',e=>{e.preventDefault();dc++;$('#drop').classList.add('on')});
+addEventListener('dragleave',()=>{if(--dc<=0){dc=0;$('#drop').classList.remove('on')}});
+addEventListener('dragover',e=>e.preventDefault());
+addEventListener('drop',e=>{e.preventDefault();dc=0;$('#drop').classList.remove('on');openFiles(e.dataTransfer.files)});
+
+/* keyboard */
+addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT'&&e.target.type!=='range'||e.metaKey||e.ctrlKey)return;const k=e.key;
+  if(k==='ArrowRight'&&st.mode!=='scroll'){e.preventDefault();step(st.rtl?-1:1)}
+  else if(k==='ArrowLeft'&&st.mode!=='scroll'){e.preventDefault();step(st.rtl?1:-1)}
+  else if(k===' '&&st.mode==='cinema'){e.preventDefault();togglePlay()}
+  else if((k===' '||k==='PageDown')&&st.mode==='flip'){e.preventDefault();step(e.shiftKey?-1:1)}
+  else if(k==='PageUp'&&st.mode==='flip')step(-1);
+  else if(k==='Home')jump(0);else if(k==='End')jump(st.src.count-1);
+  else if(k==='1')setMode('flip');else if(k==='2')setMode('scroll');else if(k==='3')setMode('cinema');
+  else if(k==='f')$('#fsBtn').click();else if(k==='d')$('#dirBtn').click();else if(k==='t')$('#toneBtn').click();else if(k==='g')$('#thumbBtn').click();
+  else if(k==='Escape'){$('#drawer').hidden=true;resetZoom()}
+});
+
+/* touch / mouse: tap zones, swipe, double-tap zoom, pinch */
+const pts=new Map();let tap=null,pinch=null,lastTap=0,tapTimer=0,wAcc=0,wLast=0;
+const stage=$('#stage');
+stage.addEventListener('pointerdown',e=>{
+  if(st.mode==='scroll'||!st.src)return;try{stage.setPointerCapture(e.pointerId)}catch(_){}
+  pts.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(pts.size===1)tap={x:e.clientX,y:e.clientY,t:Date.now(),tx:st.tx,ty:st.ty};
+  if(pts.size===2&&st.mode==='flip'){const[a,b]=[...pts.values()];pinch={d:Math.hypot(a.x-b.x,a.y-b.y)||1,z:st.z};tap=null;book.classList.add('drag')}
+});
+stage.addEventListener('pointermove',e=>{
+  if(!pts.has(e.pointerId))return;pts.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(pinch&&pts.size===2){const[a,b]=[...pts.values()];st.z=clamp(pinch.z*Math.hypot(a.x-b.x,a.y-b.y)/pinch.d,1,4);if(st.z===1)st.tx=st.ty=0;applyZoom()}
+  else if(tap&&st.z>1&&st.mode==='flip'){book.classList.add('drag');st.tx=tap.tx+e.clientX-tap.x;st.ty=tap.ty+e.clientY-tap.y;applyZoom()}
+});
+const endPt=e=>{
+  if(!pts.has(e.pointerId))return;pts.delete(e.pointerId);if(pts.size<2)pinch=null;if(!pts.size)book.classList.remove('drag');
+  if(!tap||e.type==='pointercancel'){if(!pts.size)tap=null;return}
+  const dx=e.clientX-tap.x,dy=e.clientY-tap.y,dt=Date.now()-tap.t,still=Math.abs(dx)<10&&Math.abs(dy)<10;tap=null;
+  if(st.z>1){if(still)onTap(e);return}
+  if(Math.abs(dx)>50&&Math.abs(dx)>Math.abs(dy)*1.3){step((st.rtl?dx>0:dx<0)?1:-1);return}
+  if(still&&dt<450)onTap(e);
+};
+stage.addEventListener('pointerup',endPt);stage.addEventListener('pointercancel',endPt);
+function onTap(e){
+  const fx=e.clientX/innerWidth;
+  if(st.z===1&&(fx<.28||fx>.72)){const left=fx<.28;step((st.rtl?left:!left)?1:-1);return}
+  const now=Date.now();
+  if(now-lastTap<300&&st.mode==='flip'){clearTimeout(tapTimer);lastTap=0;
+    if(st.z>1)resetZoom();else{const r=book.getBoundingClientRect();st.z=2.4;st.tx=-(e.clientX-(r.left+r.width/2))*(st.z-1);st.ty=-(e.clientY-(r.top+r.height/2))*(st.z-1);applyZoom()}return}
+  lastTap=now;clearTimeout(tapTimer);tapTimer=setTimeout(()=>setHidden(!st.hidden),st.mode==='flip'?280:0);
+}
+flipV.addEventListener('wheel',e=>{
+  e.preventDefault();if(e.ctrlKey){st.z=clamp(st.z*(1-e.deltaY*.01),1,4);if(st.z===1)st.tx=st.ty=0;applyZoom();return}
+  if(st.z>1){st.tx-=e.deltaX;st.ty-=e.deltaY;book.classList.add('drag');applyZoom();return}
+  wAcc+=e.deltaY;const now=Date.now();if(Math.abs(wAcc)>60&&now-wLast>500){step(wAcc>0?1:-1);wAcc=0;wLast=now}
+},{passive:false});
+
+let rz;addEventListener('resize',()=>{clearTimeout(rz);rz=setTimeout(()=>{if(!st.src)return;if(st.mode==='flip')renderFlip();else if(st.mode==='cinema')renderCinema();updateUI()},150)});
+
+/* start with the sample, open mid-use */
+updateUI();body.classList.toggle('rtl',st.rtl);
+Promise.race([Promise.all([document.fonts.load('80px "Dela Gothic One"'),document.fonts.load('700 30px "Zen Kaku Gothic New"')]).catch(()=>{}),new Promise(r=>setTimeout(r,1800))])
+  .then(()=>{setSource(sampleSource());setTimeout(()=>toast('Tap the edges to turn pages · Open PDF to read your own'),900)});
+}
+</script>
+</body>
+</html>
